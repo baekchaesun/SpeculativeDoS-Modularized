@@ -1,4 +1,4 @@
-# SpecDOS Physical Testnet
+# Generator-Nodes Modularized SpecDOS 
 
 This guide explains how to physically separate the transaction generator from the edge nodes that validate transactions and produce blocks.
 
