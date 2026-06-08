@@ -1,18 +1,19 @@
 # SpecDOS Physical Testnet
 
-공격자(tx 생성/전송자)와 edge node(block 생성/검증자)를 물리적으로 분리하기 위한 실행 가이드.
+This guide explains how to physically separate the transaction generator from the edge nodes that validate transactions and produce blocks.
 
 ```text
 Tx Generator
-  - honest tx 생성
-  - attack tx 생성
-  - edge node RPC로 전송
+  - Creates honest transactions
+  - Creates attack transactions
+  - Sends transactions to edge nodes through RPC
 
-Edge nodes
-  - validation + block generation
+Edge Nodes
+  - Validate transactions
+  - Generate blocks
 ```
 
-중요: edge node는 일반 geth가 아니라 이 repo의 modified geth/builder fork로 실행할 것.
+Important: edge nodes must run the modified geth/builder fork in this repository, not a stock geth binary.
 
 ## Build
 
@@ -23,24 +24,23 @@ go build ./cmd/specdos
 
 ## Modified Files
 
-수정된 파일만 commit/push하려면 아래 파일만 stage하면 됩니다.
+To commit and push only the modularized SpecDOS changes, stage only these files:
 
 ```text
-SpeculativeDoS-main/
+SpeculativeDoS-Modularized/
 ├── .gitignore
+├── README.md
 └── builder/
     ├── cmd/
     │   └── specdos/
     │       └── main.go
-    ├── docs/
-    │   └── specdos-physical-testnet.md
     └── specdos/
         ├── config.go
         ├── monitor.go
         └── txgen.go
 ```
 
-## 1. Lab Config 생성
+## 1. Create Lab Config
 
 ```bash
 ./specdos init \
@@ -52,18 +52,18 @@ SpeculativeDoS-main/
   --clique-period 12
 ```
 
-생성 파일:
+Generated files:
 
 ```text
 ./lab/genesis.json
 ./lab/keys.json
 ```
 
-`keys.json`에는 private key가 평문 작성됨. public chain에 사용하지 말고 git에 올리지 말 것.
+`keys.json` contains plaintext private keys. Use it only for a private test chain and do not commit it.
 
-## 2. Edge Node 실행
+## 2. Run Edge Nodes
 
-validator 0:
+Validator 0:
 
 ```bash
 ./specdos node \
@@ -77,7 +77,7 @@ validator 0:
   --p2p.port 30303
 ```
 
-validator 1 이상은 앞 node의 `enode`를 `--staticnodes`에 삽입.
+For validator 1 and later, pass a previous node's `enode` URL through `--staticnodes`.
 
 ```bash
 ./specdos node \
@@ -92,13 +92,13 @@ validator 1 이상은 앞 node의 `enode`를 `--staticnodes`에 삽입.
   --staticnodes "enode://..."
 ```
 
-원본 테스트의 censorship blocklist를 켜려면:
+To enable the censorship blocklist used by the original tests, add:
 
 ```bash
 --verify-censorship
 ```
 
-## 3. Tx Generator 실행
+## 3. Run Tx Generator
 
 Honest only:
 
@@ -135,24 +135,24 @@ Combined MemPurge + ConditionalExhaust:
   --contract-out ./lab/contract-address.txt
 ```
 
-의미:
+Parameter meaning:
 
 ```text
-attacker-accounts = 공격자 계정 수
-attacker-rate     = 초당 전송 chunk 수
-attacker-chunk    = chunk 하나에 담는 공격 tx 수
+attacker-accounts = number of attacker accounts
+attacker-rate     = chunks sent per second
+attacker-chunk    = attack transactions per chunk
 ```
 
-총 공격 tx 수:
+Total attack transaction count:
 
 ```text
 conditional = attacker-accounts * attacker-txs-per-account
 combined    = attacker-accounts * mem-purge-len
 ```
 
-## 4. Monitor 실행
+## 4. Run Monitor
 
-block별 tx 포함 결과를 JSONL로 기록.
+Record block-level transaction inclusion metrics as JSONL:
 
 ```bash
 ./specdos monitor \
@@ -163,31 +163,31 @@ block별 tx 포함 결과를 JSONL로 기록.
   --out ./specdos-metrics-edge0.jsonl
 ```
 
-기록 항목:
+Recorded fields include:
 
 ```text
 block number
 tx count
 honest tx count
 attacker tx count
-empty block 여부
+empty block status
 gas used
 ```
 
 ## Network
 
-권장 포트:
+Recommended ports:
 
 ```text
-8545/TCP       AWS txgen -> edge node RPC
+8545/TCP       tx generator -> edge node RPC
 30303/TCP+UDP  edge node <-> edge node P2P
-22/TCP         관리용 SSH
+22/TCP         SSH management
 ```
 
-RPC `8545`는 public internet에 직접 열지 말고 VPN, security group, firewall로 AWS txgen만 접근하게 제한할 것.
+Do not expose RPC port `8545` directly to the public internet. Restrict access with a VPN, security group, or firewall so that only the tx generator can reach it.
 
-반복 실험 시에는 edge node datadir를 초기화하거나 새 key set을 생성하는 것이 권장됨.
+For repeatable experiments, reset each edge node datadir or generate a fresh key set before each run.
 
 ## Reference
 
-이 코드는 원본 [AvivYaish/SpeculativeDoS](https://github.com/AvivYaish/SpeculativeDoS)를 참조하여, in-process txpool 주입 구조를 generator와 edge node RPC 전송 구조로 분리한 것임을 알림.
+This work references the original [AvivYaish/SpeculativeDoS](https://github.com/AvivYaish/SpeculativeDoS) repository and modularizes its in-process txpool injection workflow into a separated tx generator and edge-node RPC transmission workflow.
